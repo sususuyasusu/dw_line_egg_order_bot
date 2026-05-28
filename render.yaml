@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: dw-line-egg-order-bot
+    runtime: docker
+    plan: free
+    envVars:
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
+      - key: SPREADSHEET_ID
+        value: "1PRDhGP_4xiO_ZjJP3NB9Id3PmaPa5W7hNyrqFQ5EyqM"
+      - key: ALLOWED_GROUP_IDS
+        sync: false
