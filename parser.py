@@ -58,8 +58,11 @@ HEADER_RE = re.compile(r"^\s*卵発注\s*$")
 
 DATE_RE = re.compile(
     r"^\s*[・·•]\s*"
-    r"(?:(?P<month>\d{1,2})月)?\s*"
-    r"(?P<day>\d{1,2})日"
+    r"(?:"
+    r"(?:(?P<m1>\d{1,2})月)?\s*(?P<d1>\d{1,2})日"  # 「6月2日」「2日」
+    r"|"
+    r"(?P<m2>\d{1,2})[/／-](?P<d2>\d{1,2})"        # 「6/2」「6／2」「6-2」
+    r")"
     r"(?:\s*[（(]\s*(?P<wd>[月火水木金土日])(?:曜日?)?\s*[）)])?\s*$"
 )
 
@@ -160,8 +163,8 @@ def parse(text: str, today: dt.date | None = None) -> list[OrderItem]:
         m = DATE_RE.match(line)
         if m:
             flush()
-            month = int(m["month"]) if m["month"] else None
-            day = int(m["day"])
+            month = int(m["m1"] or m["m2"]) if (m["m1"] or m["m2"]) else None
+            day = int(m["d1"] or m["d2"])
             cur_date = _resolve_date(last_resolved, today, month, day)
             last_resolved = cur_date
             actual_wd = WEEKDAY_JP[cur_date.weekday()]
