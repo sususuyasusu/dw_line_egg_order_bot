@@ -4,25 +4,18 @@ LINE Bot: どら山社員グループの「卵発注」メッセージを
 """
 import logging
 import os
-import traceback
 
 from fastapi import FastAPI, HTTPException, Request
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import (
-    ApiClient,
-    Configuration,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
-)
+from linebot.v3.messaging import Configuration
 from linebot.v3.webhooks import (
     GroupSource,
     MessageEvent,
     TextMessageContent,
 )
 
-from parser import format_reply, parse, starts_with_egg_order
+from parser import parse, starts_with_egg_order
 from sheets import get_client_from_env
 
 CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
@@ -61,16 +54,6 @@ async def webhook(request: Request):
     return {"status": "ok"}
 
 
-def _reply(reply_token: str, text: str) -> None:
-    with ApiClient(configuration) as api_client:
-        MessagingApi(api_client).reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[TextMessage(text=text)],
-            )
-        )
-
-
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text(event: MessageEvent):
     text = event.message.text or ""
@@ -89,47 +72,28 @@ def handle_text(event: MessageEvent):
 
     try:
         items = parse(text)
-    except Exception as e:
+    except Exception:
         log.exception("parse failed")
-        _reply(event.reply_token, f"⚠️ パース失敗: {e}")
         return
 
     if not items:
-        _reply(
-            event.reply_token,
-            "⚠️ 発注内容を読み取れませんでした。\n"
-            "フォーマット:\n卵発注\n・2日（火）\n　卵黄 5kg×2\n　卵白 5kg×6",
-        )
+        log.info("no items parsed from text")
         return
 
     try:
         client = get_client_from_env()
         results = client.write_orders(items)
-    except Exception as e:
+    except Exception:
         log.exception("sheets write failed")
-        tb = traceback.format_exc()
-        log.error(tb)
-        _reply(event.reply_token, f"⚠️ シート書込失敗: {e}")
         return
 
-    ok_items = [r.item for r in results if r.ok]
-    ng_lines = [
-        f"× {r.item.date.month}/{r.item.date.day}: {r.error}"
-        for r in results
-        if not r.ok
-    ]
-
-    note = ""
-    if ng_lines:
-        note = "未反映:\n" + "\n".join(ng_lines)
-
-    reply_text = format_reply(ok_items, note=note) if ok_items else (
-        "⚠️ すべての日付で書込失敗\n" + "\n".join(ng_lines)
-    )
-    _reply(event.reply_token, reply_text)
+    for r in results:
+        if r.ok:
+            log.info(
+                "wrote tab=%s row=%s date=%s yolk=%s white=%s",
+                r.tab, r.row, r.item.date, r.item.yolk_rot, r.item.white_rot,
+            )
+        else:
+            log.warning("skip date=%s: %s", r.item.date, r.error)
 
 
-@handler.add(MessageEvent)
-def handle_other(event: MessageEvent):
-    # 画像・スタンプ等は無視
-    return
