@@ -1,0 +1,21 @@
+name: keep-warm
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /healthz
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://dw-line-egg-order-bot.onrender.com/healthz || echo timeout)
+            echo "attempt=$i code=$code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          exit 1
