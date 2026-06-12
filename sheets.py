@@ -1,9 +1,12 @@
 """
-製造表 Sheets の AU/AV 列（確定便 卵黄/卵白 回転）に書き込む。
+製造表 Sheets の配送便別合算セクション(実績) W/Y列に書き込む。
 
 - タブ名は週月曜の MMDD (例: 6/1 月曜 → "0601")
-- AO 列の日付セル ("6月2日" 等) を検索して行を特定
-- AU = 卵黄回転、AV = 卵白回転 を上書き
+- 火曜便=行69, 木曜便=行70, 土曜便=行71（固定）
+- W = 卵黄g, Y = 卵白g を g単位で書込
+- AU/AV (確定便 回転) はシート側の数式が W/Y を参照して自動計算する
+
+シートの日付表示フォーマットや AU/AV の数式変更に影響されないようになった。
 """
 from __future__ import annotations
 
@@ -44,60 +47,8 @@ class SheetsClient:
         monday = date - dt.timedelta(days=date.weekday())
         return f"{monday.month:02d}{monday.day:02d}"
 
-    @staticmethod
-    def date_cell_text(date: dt.date) -> str:
-        return f"{date.month}月{date.day}日"
-
-    @staticmethod
-    def _parse_cell_to_date(s: str) -> dt.date | None:
-        """シートの表示文字列を date に変換。複数フォーマット対応。"""
-        s = s.strip()
-        if not s:
-            return None
-        formats = (
-            "%Y/%m/%d", "%Y-%m-%d", "%Y/%-m/%-d", "%Y-%-m-%-d",
-            "%m/%d/%Y", "%-m/%-d/%Y",
-            "%m月%d日", "%-m月%-d日",
-            "%m/%d", "%-m/%-d",
-        )
-        for fmt in formats:
-            try:
-                d = dt.datetime.strptime(s, fmt).date()
-                return d
-            except ValueError:
-                continue
-        return None
-
-    def _find_row(self, ws: gspread.Worksheet, date: dt.date) -> int | None:
-        """AO 列の各セルを date として解釈し、target date と日付一致する行を返す。
-        年が省略表記なら月日のみ一致でOK。"""
-        # AO列を unformatted で取得（シリアル数値 or 文字列）
-        col = ws.get_values(
-            "AO1:AO200", value_render_option="UNFORMATTED_VALUE"
-        )
-        sheet_epoch = dt.date(1899, 12, 30)  # Google Sheets エポック
-        for i, row in enumerate(col, start=1):
-            if not row:
-                continue
-            v = row[0]
-            cand: dt.date | None = None
-            if isinstance(v, (int, float)):
-                try:
-                    cand = sheet_epoch + dt.timedelta(days=int(v))
-                except (OverflowError, ValueError):
-                    cand = None
-            elif isinstance(v, str):
-                cand = self._parse_cell_to_date(v)
-            if cand is None:
-                continue
-            # 年が来てない（月日のみ）の場合は month/day だけ一致でOK
-            if cand.year < 1900:
-                if cand.month == date.month and cand.day == date.day:
-                    return i
-            else:
-                if cand == date:
-                    return i
-        return None
+    # 火曜便=行69, 木曜便=行70, 土曜便=行71 （weekday: 月=0..日=6）
+    BIN_ROW_BY_WEEKDAY = {1: 69, 3: 70, 5: 71}
 
     def write_orders(self, items: list[OrderItem]) -> list[WriteResult]:
         results: list[WriteResult] = []
@@ -114,21 +65,18 @@ class SheetsClient:
                     results.append(WriteResult(it, tab, 0, False, f"タブ {tab} なし"))
                 continue
             for it in group:
-                row = self._find_row(ws, it.date)
+                wd = it.date.weekday()
+                row = self.BIN_ROW_BY_WEEKDAY.get(wd)
                 if row is None:
                     results.append(
-                        WriteResult(it, tab, 0, False, f"AO列に {self.date_cell_text(it.date)} なし")
+                        WriteResult(it, tab, 0, False, f"{it.weekday}曜日は火/木/土便ではない")
                     )
                     continue
                 updates = []
                 if it.yolk_packs:
-                    updates.append(
-                        {"range": f"AU{row}", "values": [[round(it.yolk_rot, 2)]]}
-                    )
+                    updates.append({"range": f"W{row}", "values": [[it.yolk_g]]})
                 if it.white_packs:
-                    updates.append(
-                        {"range": f"AV{row}", "values": [[round(it.white_rot, 2)]]}
-                    )
+                    updates.append({"range": f"Y{row}", "values": [[it.white_g]]})
                 if updates:
                     ws.batch_update(updates, value_input_option="USER_ENTERED")
                 results.append(WriteResult(it, tab, row, True))
