@@ -58,6 +58,11 @@ async def webhook(request: Request):
 def handle_text(event: MessageEvent):
     text = event.message.text or ""
 
+    # 在籍グループの記録（本文は記録しない。業界ウォッチ配信先の特定用）
+    _gid = getattr(event.source, "group_id", None)
+    if _gid:
+        log.info("seen group_id=%s", _gid)
+
     # 「卵発注」で始まる本文のみ処理
     if not starts_with_egg_order(text):
         return
