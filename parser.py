@@ -57,11 +57,11 @@ class OrderItem:
 HEADER_RE = re.compile(r"^\s*卵発注\s*$")
 
 DATE_RE = re.compile(
-    r"^\s*[・·•]\s*"
+    r"^\s*[・·•]?\s*"                                        # 行頭の中黒は任意
     r"(?:"
-    r"(?:(?P<m1>\d{1,2})月)?\s*(?P<d1>\d{1,2})日"  # 「6月2日」「2日」
+    r"(?P<m2>\d{1,2})[/／-](?P<d2>\d{1,2})\s*日?"            # 「8/11」「8／11」「8-11」「8/11日」
     r"|"
-    r"(?P<m2>\d{1,2})[/／-](?P<d2>\d{1,2})"        # 「6/2」「6／2」「6-2」
+    r"(?:(?P<m1>\d{1,2})月)?\s*(?P<d1>\d{1,2})日"            # 「8月11日」「11日」
     r")"
     r"(?:\s*[（(]\s*(?P<wd>[月火水木金土日])(?:曜日?)?\s*[）)])?\s*$"
 )
@@ -98,12 +98,22 @@ def _resolve_date(
     last が無い場合 (最初の日付) は today 以降の最も近い (month, day)。"""
     base = last if last else today - dt.timedelta(days=1)
     if month is not None:
-        # 月明示: base 以降で最初の (month, day) を探す（多年跨ぎ防止のため2年以内）
-        for year in (base.year, base.year + 1):
+        # 月明示: today に近い年を優先して選ぶ。
+        # 「8/11」を 1年後(2027-08-11) と誤解釈しないよう、today の前後180日に入る候補を最優先。
+        # （締切直前の訂正など、数日前の日付が送られてもその年として扱う）
+        cands = []
+        for year in (today.year - 1, today.year, today.year + 1):
             try:
-                cand = dt.date(year, month, day)
+                cands.append(dt.date(year, month, day))
             except ValueError:
                 continue
+        near = [c for c in cands if abs((c - today).days) <= 180]
+        after = [c for c in near if c > base]
+        if after:
+            return min(after)          # メッセージ内の日付は昇順に並ぶ想定
+        if near:
+            return min(near, key=lambda c: abs((c - today).days))
+        for cand in sorted(cands):
             if cand > base:
                 return cand
         raise ValueError(f"unable to resolve {month}/{day} after {base}")
