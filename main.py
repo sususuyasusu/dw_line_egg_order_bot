@@ -32,6 +32,19 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
 app = FastAPI()
 
+# ── 証憑取込（DW証憑Dropbox）を同居マウント ──
+# 常時稼働のこの Starter インスタンスに /receipt/* として相乗りさせる（追加費用ゼロ）。
+# 環境変数(RECEIPT_*/DROPBOX_*)が無い・不備でも卵発注側は一切影響を受けない。
+try:
+    import receipt_intake
+    if receipt_intake.configured():
+        app.include_router(receipt_intake.router)
+        log.info("receipt intake mounted at /receipt")
+    else:
+        log.info("receipt intake env not configured; skipped")
+except Exception:
+    log.exception("receipt intake mount failed (egg bot unaffected)")
+
 
 @app.get("/")
 def root():

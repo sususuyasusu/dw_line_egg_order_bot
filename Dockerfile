@@ -1,9 +1,16 @@
 FROM python:3.11-slim
 
+# 証憑取込（/receipt）用: 日本語OCRで透明テキスト層付きPDFを作る
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-jpn \
+    tesseract-ocr-jpn-vert \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py parser.py sheets.py ./
+COPY main.py parser.py sheets.py receipt_intake.py ./
 
 ENV PORT=8000
 EXPOSE 8000
