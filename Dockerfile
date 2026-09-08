@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py parser.py sheets.py receipt_intake.py ./
+COPY main.py parser.py sheets.py receipt_intake.py freee_receipt_intake.py ./
 
 ENV PORT=8000
 EXPOSE 8000

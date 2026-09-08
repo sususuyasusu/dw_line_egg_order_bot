@@ -45,6 +45,19 @@ try:
 except Exception:
     log.exception("receipt intake mount failed (egg bot unaffected)")
 
+# ── freeeファイルボックス取込（セゾンカード領収書 @916egopi）を同居マウント ──
+# 旧 dw_line_freee_uploader（無料枠スリープで取りこぼし）から常時稼働のこのStarterへ移設。
+# FREEE_RCPT_*/FREEE_* が無ければマウントしない＝卵発注・Dropbox取込は一切影響を受けない。
+try:
+    import freee_receipt_intake
+    if freee_receipt_intake.configured():
+        app.include_router(freee_receipt_intake.router)
+        log.info("freee receipt intake mounted at /freee-receipt")
+    else:
+        log.info("freee receipt intake env not configured; skipped")
+except Exception:
+    log.exception("freee receipt intake mount failed (egg bot unaffected)")
+
 
 @app.get("/")
 def root():
