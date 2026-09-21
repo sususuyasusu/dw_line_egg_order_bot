@@ -87,10 +87,17 @@ class SheetsClient:
             found_rows = self._bin_rows(ws)      # ラベルから実際の行を特定（週ごとのズレに追従）
             for it in group:
                 wd = it.date.weekday()
-                row = found_rows.get(wd) or self.BIN_ROW_BY_WEEKDAY.get(wd)
-                if row is None:
+                if wd not in self.BIN_LABEL_BY_WEEKDAY:
                     results.append(
                         WriteResult(it, tab, 0, False, f"{it.weekday}曜日は火/木/土便ではない")
+                    )
+                    continue
+                # 行が名前で見つからない時に既定の行番号へ書くと、見出し行や別の便を壊す（抹茶行の追加後は71〜73）。
+                # 見つからなければ書かずに失敗として返す。
+                row = found_rows.get(wd)
+                if row is None:
+                    results.append(
+                        WriteResult(it, tab, 0, False, f"タブ {tab} に{self.BIN_LABEL_BY_WEEKDAY[wd]}の行が見つからず未記録")
                     )
                     continue
                 updates = []
